@@ -1,0 +1,80 @@
+#!/usr/bin/env python
+# coding=utf-8
+# Copyright (C) Derek Davis (2017)
+#
+# This file is part of the Ligo Sounds python package.
+#
+# Ligo Sounds is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# Ligo Sounds is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with Ligo Sounds.  If not, see <http://www.gnu.org/licenses/>.
+
+import numpy as np
+import scipy as sp
+import argparse
+import os
+
+parser = argparse.ArgumentParser()
+parser.add_argument('-s', '--start',
+                    help='start of segment search')
+parser.add_argument('-e', '--end',
+                    help='end of segment search')
+parser.add_argument('-o', '--output',
+                    help='output name for ASD pickle')
+parser.add_argument('-i', '--ifo',
+                    help='ifo to check at')
+args = parser.parse_args()
+
+start_time = float(args.start)
+end_time   = float(args.end)
+file_name  = args.output
+ifo = args.ifo
+
+#=====  Call Segments ===========
+
+from gwpy.segments import DataQualityFlag
+
+times = DataQualityFlag.query(ifo+':DMT-ANALYSIS_READY:1',
+                          start_time,end_time)
+i = 0
+start = np.zeros(len(times.active))
+end = np.zeros(len(times.active))
+
+for segment in times.active:
+    start[i] = segment.start
+    end[i] = segment.end
+    i = i + 1
+print 'number of segments: ', i
+print
+
+#=====  Fetch Data ===========
+
+from gwpy.timeseries import TimeSeries
+
+asd_dict = {}
+
+n = 0
+for segment in times.active:
+    if (end[n] - start[n]) > 20:
+        data = TimeSeries.find(ifo+':GDS-CALIB_STRAIN',
+                               start[n]+10, end[n]-10,
+                               frametype=ifo+'_HOFT_C00')
+        data_asd = data.asd(fftlength=1,overlap=.5,
+                            method='median')
+        asd_dict[start[n]] = data_asd
+    print 'percent complete: ', 100 * (start[n]-start_time) / (end_time-start_time)
+    n = n + 1
+
+#=====  Pickle Creation ===========
+
+import pickle
+
+pickle.dump(asd_dict,open(file_name,'wb'))

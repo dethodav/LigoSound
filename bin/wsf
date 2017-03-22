@@ -1,0 +1,127 @@
+#!/usr/bin/env python
+# coding=utf-8
+# Copyright (C) Derek Davis (2017)
+#
+# This file is part of the Ligo Sounds python package.
+#
+# Ligo Sounds is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# Ligo Sounds is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with Ligo Sounds.  If not, see <http://www.gnu.org/licenses/>.
+
+# This will be the wrapper that takes in command line arguments
+# and then produces the audio file with sound()
+ 
+
+from __future__ import print_function
+
+import os.path
+import sys
+from subprocess import (Popen, PIPE, CalledProcessError)
+
+from glue.lal import Cache
+
+from gwpy.time import to_gps
+
+from LigoSound.sound import editing
+
+from gwdetchar import (cli, const)
+from gwdetchar.io.datafind import find_frames
+from gwdetchar.utils import which
+
+parser = cli.create_parser(description=__doc__)
+parser.add_argument('gpstime', type=str, help='GPS time of scan')
+cli.add_ifo_option(parser)
+parser.add_argument('-o', '--output-directory',
+                    help='output directory for scan, '
+                         'default: ~/public_html/wsf/{IFO}_{gpstime}')
+parser.add_argument('-w', '--width',
+                    help='length of audio file')
+parser.add_argument('-c', '--channel',
+                    help='channel')
+parser.add_argument('-f', '--frame-type',
+                    help='frame type of channel')
+parser.add_argument('-a', '--ASD-loc',
+                    help='location of ASD pickle')
+parser.add_argument('-hp', '--highpass',
+                    help='highpass frequency')
+parser.add_argument('-lp', '--lowpass',
+                    help='lowpass frequency')
+parser.add_argument('-s', '--shift',
+                    help='shift frequency')
+parser.add_argument('--stretch',
+                    help='stretch factor')
+parser.add_argument('--amp',
+                    help='maximum amplitude')
+parser.add_argument('--invA',action='store_true',
+                    help='Inverse A Weighting')
+parser.add_argument('--whiten',action='store_true',
+                    help='Whitening')
+parser.add_argument('--condor', action='store_true', default=False,
+                    help='indicates this job is running under condor, '
+                         'only use when running as part of a workflow')
+
+args = parser.parse_args()
+
+print("----------------------------------------------\n"
+      "Creating Audio file for %s..." % args.gpstime)
+
+gps = args.gpstime
+gpstime = float(gps)
+ifo = args.ifo
+obs = args.ifo[0]
+
+# set output directory
+outdir = args.output_directory
+if outdir is None:
+    outdir = os.path.expanduser('~/public_html/wsf/%s_%s' % (ifo, gps))
+if not os.path.isdir(outdir):
+    os.makedirs(outdir)
+print("Ouput directory created as %s" % outdir)
+
+# set frame
+ftype = args.frame_type
+#set channel
+channel = args.channel
+#set width
+width = args.width
+# set ASD-loc
+ASD_loc = args.ASD_loc
+# set highpass
+HIGHPASS = args.highpass
+# set lowpass
+LOWPASS = args.lowpass
+# set shift
+SHIFT = args.shift
+if SHIFT is None:
+    SHIFT = 0
+# set stretch
+STRETCH = args.stretch
+if STRETCH is None:
+    STRETCH = 1.
+# set amp
+AMP = args.amp
+if AMP is None:
+    AMP = .1
+# set invA
+if args.invA:
+    AWEIGHT = True
+else:
+    AWEIGHT = False
+# set whiten
+if args.whiten:
+    WHITE = True
+else:
+    WHITE = False
+# run scan
+editing.sound(gps, channel, width, outdir, frame=ftype, ASDloc=ASD_loc, 
+          lpass=LOWPASS, hpass=HIGHPASS, shift=SHIFT, stretch=STRETCH, 
+          Aweight=AWEIGHT, maxamp=AMP, whiten=WHITE)

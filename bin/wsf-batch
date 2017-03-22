@@ -1,0 +1,187 @@
+#!/usr/bin/env python
+# coding=utf-8
+# Copyright (C) Derek Davis (2017)
+#
+# This file is part of the Ligo Sounds python package.
+#
+# Ligo Sounds is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# Ligo Sounds is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with Ligo Sounds.  If not, see <http://www.gnu.org/licenses/>.
+
+# This will be the wrapper that allows you to produce audio for a list
+# of times and sends them to condor
+
+
+import os
+from getpass import getuser
+
+from glue import pipeline
+
+from LigoSound.sound import editing
+
+from gwdetchar import (cli)
+
+# attempt to get WSF path
+WSF = os.path.join(os.path.dirname(__file__), 'wsf')
+if not os.path.isfile(WSF):
+    WSF = None
+
+# set default accounting information
+CONDOR_ACCOUNTING_GROUP = os.getenv(
+    '_CONDOR_ACCOUNTING_GROUP', 'ligo.prod.o2.detchar.explore.test')
+CONDOR_ACCOUNTING_USER = os.getenv(
+    '_CONDOR_ACCOUNTING_USER', getuser())
+
+
+# -- parse command line -------------------------------------------------------
+
+parser = cli.create_parser(
+    description=__doc__,
+    formatter_class=cli.argparse.ArgumentDefaultsHelpFormatter,
+)
+
+parser.add_argument('gps-time', nargs='+',
+                    help='GPS time(s) to scan, or path to a file '
+                         'containing a single column of such times')
+cli.add_ifo_option(parser)
+parser.add_argument('-o', '--output-dir', default=os.getcwd(),
+                    help='output directory for all scans')
+
+parser.add_argument('-q', '--wsf', default=WSF, required=WSF is None,
+                    help='path to wsf executable')
+
+cargs = parser.add_argument_group('Condor options')
+cargs.add_argument('-u', '--universe', default='vanilla', type=str,
+                   help='universe for condor processing')
+cargs.add_argument('--condor-accounting-group',
+                   default=CONDOR_ACCOUNTING_GROUP,
+                   help='accounting_group for condor submission on the LIGO '
+                        'Data Grid')
+cargs.add_argument('--condor-accounting-group-user',
+                   default=CONDOR_ACCOUNTING_USER,
+                   help='accounting_group_user for condor submission on the '
+                        'LIGO Data Grid')
+
+parser.add_argument('-w', '--width',
+                    help='length of audio file')
+parser.add_argument('-c', '--channel',
+                    help='channel')
+parser.add_argument('-f', '--frame-type',
+                    help='frame type of channel')
+parser.add_argument('-a', '--ASD-loc',
+                    help='location of ASD pickle')
+parser.add_argument('-hp', '--highpass',
+                    help='highpass frequency')
+parser.add_argument('-lp', '--lowpass',
+                    help='lowpass frequency')
+parser.add_argument('-s', '--shift',
+                    help='shift frequency')
+parser.add_argument('--stretch',
+                    help='stretch factor')
+parser.add_argument('--amp',
+                    help='maximum amplitude')
+parser.add_argument('--invA',action='store_true',
+                    help='Inverse A Weighting')
+parser.add_argument('--whiten',action='store_true',
+                    help='Whitening')
+
+args = parser.parse_args()
+
+outdir = os.path.abspath(os.path.expanduser(args.output_dir))
+
+# parse times
+times = getattr(args, 'gps-time')
+
+if len(times) == 1:
+    try:  # try converting to GPS
+        times = [float(times[0])]
+    except (TypeError, ValueError):  # otherwise read as file
+        import numpy
+        times = numpy.loadtxt(times[0], dtype=float)
+else:
+    times = map(float, times)
+
+# -- generate workflow --------------------------------------------------------
+
+tag = 'wsf-batch'
+
+# generate directories
+logdir = os.path.join(outdir, 'logs')
+subdir = os.path.join(outdir, 'condor')
+for d in [outdir, logdir, subdir]:
+    if not os.path.isdir(d):
+        os.makedirs(d)
+
+# start workflow
+dag = pipeline.CondorDAG(os.path.join(logdir, '%s.log' % tag))
+dag.set_dag_file(os.path.join(subdir, tag))
+dagfile = dag.get_dag_file()
+
+# configure wsf job
+job = pipeline.CondorDAGJob(args.universe, args.wsf)
+job.set_sub_file('%s.sub' % os.path.splitext(dagfile)[0])
+logstub = os.path.join(logdir, '%s-$(cluster)-$(process)' % tag)
+job.set_log_file('%s.log' % logstub)
+job.set_stdout_file('%s.out' % logstub)
+job.set_stderr_file('%s.err' % logstub)
+job.add_condor_cmd('getenv', 'True')
+job.add_condor_cmd('accounting_group', args.condor_accounting_group)
+job.add_condor_cmd('accounting_group_user', args.condor_accounting_group_user)
+if args.universe != 'local':
+    job.add_condor_cmd('request_memory', 4096)
+
+# add common wsf options
+job.add_opt('ifo', args.ifo)
+job.add_opt('condor', '')
+
+job.add_opt('width',args.width)
+job.add_opt('channel',args.channel)
+if args.frame_type:
+    job.add_opt('frame-type',args.frame_type)
+if args.ASD_loc:
+    job.add_opt('ASD-loc',args.ASD_loc)
+if args.highpass:
+    job.add_opt('highpass',args.highpass)
+if args.lowpass:
+    job.add_opt('lowpass',args.lowpass)
+if args.shift:
+    job.add_opt('shift',args.shift)
+if args.stretch:
+    job.add_opt('stretch',args.stretch)
+if args.invA:
+    job.add_opt('invA','')
+if args.whiten:
+    job.add_opt('whiten','')
+
+# make node in workflow for each time
+for t in times:
+    node = pipeline.CondorDAGNode(job)
+    node.set_category('wsf')
+    node.set_retry(1)
+    node.add_var_arg(str(t))
+    node.add_var_opt('output-dir', os.path.join(outdir, ''))
+    dag.add_node(node)
+
+# write DAG
+dag.write_sub_files()
+dag.write_dag()
+dag.write_script()
+
+# print instructions for the user
+shfile = '%s.sh' % os.path.splitext(dagfile)[0]
+print("Workflow generated for %d times" % len(times))
+print("Run in the current shell via:\n\n$ %s\n" % shfile)
+if os.path.isfile('%s.rescue001' % dagfile):
+    print("Or, submit to condor via:\n\n$ condor_submit_dag -force %s"
+          % dagfile)
+else:
+    print("Or, submit to condor via:\n\n$ condor_submit_dag %s" % dagfile)
