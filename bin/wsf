@@ -43,7 +43,7 @@ cli.add_ifo_option(parser)
 parser.add_argument('-o', '--output-directory',
                     help='output directory for scan, '
                          'default: ~/public_html/wsf/{IFO}_{gpstime}')
-parser.add_argument('-w', '--width',
+parser.add_argument('-d', '--duration',
                     help='length of audio file')
 parser.add_argument('-c', '--channel',
                     help='channel')
@@ -65,6 +65,8 @@ parser.add_argument('--invA',action='store_true',
                     help='Inverse A Weighting')
 parser.add_argument('--whiten',action='store_true',
                     help='Whitening')
+parser.add_argument('--center',action='store_true',
+                    help='Centers audio file around time')
 parser.add_argument('--condor', action='store_true', default=False,
                     help='indicates this job is running under condor, '
                          'only use when running as part of a workflow')
@@ -92,7 +94,7 @@ ftype = args.frame_type
 #set channel
 channel = args.channel
 #set width
-width = args.width
+duration = args.duration
 # set ASD-loc
 ASD_loc = args.ASD_loc
 # set highpass
@@ -121,7 +123,12 @@ if args.whiten:
     WHITE = True
 else:
     WHITE = False
+# set center
+if args.center:
+    CENTER = True
+else:
+    CENTER = False
 # run scan
-editing.sound(gps, channel, width, outdir, frame=ftype, ASDloc=ASD_loc, 
+editing.sound(gps, channel, duration, outdir, frame=ftype, ASDloc=ASD_loc, 
           lpass=LOWPASS, hpass=HIGHPASS, shift=SHIFT, stretch=STRETCH, 
-          Aweight=AWEIGHT, maxamp=AMP, whiten=WHITE)
+          Aweight=AWEIGHT, maxamp=AMP, whiten=WHITE, center=CENTER)

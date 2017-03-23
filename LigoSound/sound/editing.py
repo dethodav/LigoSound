@@ -162,13 +162,19 @@ def invAWeight(TS,cutoff = 20):
     out = TimeSeries(time_out, sample_rate = samp_rate)
     return out
 
-def sound(gps, channel, width, outdir, frame=None, ASDloc=None, 
+def sound(gps, channel, duration, outdir, frame=None, ASDloc=None, 
           lpass=None, hpass=None, shift=0, stretch=1, 
-          Aweight=False, maxamp=.1, whiten=True):
+          Aweight=False, maxamp=.1, whiten=True, center=False):
     print "begin"
     time = float(gps)
-    start = time - float(width)/2.
-    end = time + float(width)/2.
+
+    if center == True:
+        start = time - float(duration)/2.
+        end = time + float(duration)/2.
+    else: 
+        start = time
+        end = time + float(duration)
+
     if frame == None:
         data = TimeSeries.get(channel, start, end)
     else:

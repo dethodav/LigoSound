@@ -71,7 +71,7 @@ cargs.add_argument('--condor-accounting-group-user',
                    help='accounting_group_user for condor submission on the '
                         'LIGO Data Grid')
 
-parser.add_argument('-w', '--width',
+parser.add_argument('-d', '--duration',
                     help='length of audio file')
 parser.add_argument('-c', '--channel',
                     help='channel')
@@ -93,6 +93,8 @@ parser.add_argument('--invA',action='store_true',
                     help='Inverse A Weighting')
 parser.add_argument('--whiten',action='store_true',
                     help='Whitening')
+parser.add_argument('--center',action='store_true',
+                    help='Centers audio file around time')
 
 args = parser.parse_args()
 
@@ -161,6 +163,8 @@ if args.invA:
     job.add_opt('invA','')
 if args.whiten:
     job.add_opt('whiten','')
+if args.center:
+    job.add_opt('center','')
 
 # make node in workflow for each time
 for t in times:
