@@ -69,7 +69,8 @@ for segment in times.active:
                                frametype=ifo+'_HOFT_C00')
         data_asd = data.asd(fftlength=1,overlap=.5,
                             method='median')
-        asd_dict[start[n]] = data_asd
+        del data_asd.epoch
+        asd_dict[float(start[n])] = data_asd
     print 'percent complete: ', 100 * (start[n]-start_time) / (end_time-start_time)
     n = n + 1
 

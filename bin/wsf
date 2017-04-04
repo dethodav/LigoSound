@@ -39,7 +39,6 @@ from gwdetchar.utils import which
 
 parser = cli.create_parser(description=__doc__)
 parser.add_argument('gpstime', type=str, help='GPS time of scan')
-cli.add_ifo_option(parser)
 parser.add_argument('-o', '--output-directory',
                     help='output directory for scan, '
                          'default: ~/public_html/wsf/{IFO}_{gpstime}')
@@ -78,13 +77,12 @@ print("----------------------------------------------\n"
 
 gps = args.gpstime
 gpstime = float(gps)
-ifo = args.ifo
-obs = args.ifo[0]
+obs = args.channel[0]
 
 # set output directory
 outdir = args.output_directory
 if outdir is None:
-    outdir = os.path.expanduser('~/public_html/wsf/%s_%s' % (ifo, gps))
+    outdir = os.path.expanduser('~/public_html/wsf/%s_%s' % (obs, gps))
 if not os.path.isdir(outdir):
     os.makedirs(outdir)
 print("Ouput directory created as %s" % outdir)

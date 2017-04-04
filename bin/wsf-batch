@@ -52,7 +52,6 @@ parser = cli.create_parser(
 parser.add_argument('gps-time', nargs='+',
                     help='GPS time(s) to scan, or path to a file '
                          'containing a single column of such times')
-cli.add_ifo_option(parser)
 parser.add_argument('-o', '--output-dir', default=os.getcwd(),
                     help='output directory for all scans')
 
@@ -70,8 +69,11 @@ cargs.add_argument('--condor-accounting-group-user',
                    default=CONDOR_ACCOUNTING_USER,
                    help='accounting_group_user for condor submission on the '
                         'LIGO Data Grid')
+cargs.add_argument('--condor-memory-request',
+                   default=4096,
+                   help='memory requested per job')
 
-parser.add_argument('-d', '--duration',
+parser.add_argument('-d', '--duration', nargs='+',
                     help='length of audio file')
 parser.add_argument('-c', '--channel',
                     help='channel')
@@ -112,6 +114,20 @@ if len(times) == 1:
 else:
     times = map(float, times)
 
+# parse times
+durs = getattr(args, 'duration')
+
+if len(durs) == 1:
+    try:  # try converting to GPS
+        durs = [float(durs[0])]
+    except (TypeError, ValueError):  # otherwise read as file
+        import numpy
+        durs = numpy.loadtxt(durs[0], dtype=float)
+else:
+    durs = map(float, durs)
+
+
+
 # -- generate workflow --------------------------------------------------------
 
 tag = 'wsf-batch'
@@ -139,13 +155,12 @@ job.add_condor_cmd('getenv', 'True')
 job.add_condor_cmd('accounting_group', args.condor_accounting_group)
 job.add_condor_cmd('accounting_group_user', args.condor_accounting_group_user)
 if args.universe != 'local':
-    job.add_condor_cmd('request_memory', 4096)
+    job.add_condor_cmd('request_memory', args.condor_memory_request)
 
 # add common wsf options
-job.add_opt('ifo', args.ifo)
 job.add_opt('condor', '')
 
-job.add_opt('width',args.width)
+job.add_opt('duration',args.duration)
 job.add_opt('channel',args.channel)
 if args.frame_type:
     job.add_opt('frame-type',args.frame_type)
@@ -167,13 +182,19 @@ if args.center:
     job.add_opt('center','')
 
 # make node in workflow for each time
+val = 0
 for t in times:
     node = pipeline.CondorDAGNode(job)
     node.set_category('wsf')
     node.set_retry(1)
     node.add_var_arg(str(t))
     node.add_var_opt('output-dir', os.path.join(outdir, ''))
+    if len(durs) != 1:
+        node.add_var_opt('duration', durs[val])
+    else:
+        node.add_var_opt('duration', durs[0])
     dag.add_node(node)
+    val += 1
 
 # write DAG
 dag.write_sub_files()
