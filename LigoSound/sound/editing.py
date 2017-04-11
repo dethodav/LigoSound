@@ -169,7 +169,7 @@ def invAWeight(TS,cutoff = 20):
 
 def cutoff(timeseries, highfreq):
     timeseries_filtered = timeseries.lowpass(highfreq)
-    timeseries_filtered = timeseries_filtered.resample(highfreq+100)
+    timeseries_filtered = timeseries_filtered.resample(2*highfreq+100)
     return timeseries_filtered
 
 def sound(gps, channel, duration, outdir, frame=None, ASDloc=None, 
@@ -193,21 +193,26 @@ def sound(gps, channel, duration, outdir, frame=None, ASDloc=None,
 
     found = False
     base = 0
+    close = 1e10
     if ASDloc != None:
 	    asd_dict = pickle.load( open( ASDloc, "rb" ) )
 		#finds closest asd to use
             for ts in asd_dict:
-		if (time > ts):
+                k = time - ts
+		if (close > k > 0):
                     base = ts
+                    close = k
 	            found = True
     if found == False:
-        ASD = data.asd(1,.5)
+        ASD = data.asd(4,2)
+        print "own ASD"
     else:
         ASD = asd_dict[base]
+        print base
     print "data found"
 	#Now do filtering
     if whiten == True:
-	   data = data.whiten(1,.5,asd=ASD)
+	   data = data.whiten(4,2,asd=ASD)
 
     if lpass != None:
 	    data = cutoff(data,float(lpass))
