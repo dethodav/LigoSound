@@ -214,6 +214,7 @@ def sound(gps, channel, duration, outdir, frame=None, ASDloc=None,
     if whiten == True:
 	   data = data.whiten(4,2,asd=ASD)
 
+        #bandpass with sample rate reduction
     if lpass != None:
 	    data = cutoff(data,float(lpass))
     if hpass != None:
