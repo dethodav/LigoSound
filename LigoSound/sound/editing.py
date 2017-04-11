@@ -33,6 +33,7 @@ import scipy.io.wavfile as wav
 import numpy as np
 import scipy as sp
 import scipy.signal as sig
+import pickle
 
 def fshift(timeseries,shift_size,method='push'):
 	"""Frequency shift the spectrum of the Timeseries.
@@ -54,13 +55,13 @@ def fshift(timeseries,shift_size,method='push'):
 	    df = 1.0/time_length
 	    nbins = int(shift_size/df)
 
-	    freq_rep = npfft.rfft(data)
-	    shifted_freq = numpy.zeros(len(freq_rep),dtype=complex)
+	    freq_rep = np.fft.rfft(data)
+	    shifted_freq = np.zeros(len(freq_rep),dtype=complex)
 	    for i in range(0,len(freq_rep)-1):
 		    if 0<(i-nbins)<len(freq_rep):
 			   shifted_freq[i]=freq_rep[i-nbins]
-	    output = npfft.irfft(shifted_freq)
-	    out_real = numpy.real(output)
+	    output = np.fft.irfft(shifted_freq)
+	    out_real = np.real(output)
 
 	if (method=='hilbert'):
 	    if (fshift < 0):
@@ -97,7 +98,11 @@ def wavwrite(timeseries,file_name,rate=4096,amp=.1):
 	    for details on the write process. 
 	"""
 
-	timeseries_resamp = timeseries.resample(rate)
+        if timeseries.sample_rate.value != rate:
+            print "resampling"
+	    timeseries_resamp = timeseries.resample(rate)
+        else:
+            timeseries_resamp = timeseries
 	timeseries_normal  = amp * timeseries_resamp.value / (max(abs(timeseries_resamp.value)))
 
 	wav.write(file_name,rate,timeseries_normal)
@@ -162,13 +167,24 @@ def invAWeight(TS,cutoff = 20):
     out = TimeSeries(time_out, sample_rate = samp_rate)
     return out
 
-def sound(gps, channel, width, outdir, frame=None, ASDloc=None, 
+def cutoff(timeseries, highfreq):
+    timeseries_filtered = timeseries.lowpass(highfreq)
+    timeseries_filtered = timeseries_filtered.resample(2*highfreq+100)
+    return timeseries_filtered
+
+def sound(gps, channel, duration, outdir, frame=None, ASDloc=None, 
           lpass=None, hpass=None, shift=0, stretch=1, 
-          Aweight=False, maxamp=.1, whiten=True):
+          Aweight=False, maxamp=.1, whiten=True, center=False):
     print "begin"
     time = float(gps)
-    start = time - float(width)/2.
-    end = time + float(width)/2.
+
+    if center == True:
+        start = time - float(duration)/2.
+        end = time + float(duration)/2.
+    else: 
+        start = time
+        end = time + float(duration)
+
     if frame == None:
         data = TimeSeries.get(channel, start, end)
     else:
@@ -177,24 +193,29 @@ def sound(gps, channel, width, outdir, frame=None, ASDloc=None,
 
     found = False
     base = 0
+    close = 1e10
     if ASDloc != None:
-	    asd_dict = pickle.load( open( asd_file, "rb" ) )
+	    asd_dict = pickle.load( open( ASDloc, "rb" ) )
 		#finds closest asd to use
             for ts in asd_dict:
-		while found == False:
-		    if (time > ts):
-	   	        ASD = asd_dict[base]
-	                found = True
-		    time = ts    
+                k = time - ts
+		if (close > k > 0):
+                    base = ts
+                    close = k
+	            found = True
     if found == False:
-        ASD = data.asd(1,.5)
+        ASD = data.asd(4,2)
+        print "own ASD"
+    else:
+        ASD = asd_dict[base]
+        print base
     print "data found"
 	#Now do filtering
     if whiten == True:
-	   data = data.whiten(1,.5,asd=ASD)
+	   data = data.whiten(4,2,asd=ASD)
 
     if lpass != None:
-	    data = data.lowpass(float(lpass))
+	    data = cutoff(data,float(lpass))
     if hpass != None:
         data = data.highpass(float(hpass))
 	if (shift != 0):
@@ -205,4 +226,4 @@ def sound(gps, channel, width, outdir, frame=None, ASDloc=None,
         data = time_expand_central_freq(data,float(stretch))
     #set up file name
     path = outdir + '/' + gps  + '.wav'
-    wavwrite(data,path,amp=maxamp)
+    wavwrite(data,path,amp=maxamp,rate=data.sample_rate.value)
