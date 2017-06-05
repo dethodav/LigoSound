@@ -220,10 +220,10 @@ def sound(gps, channel, duration, outdir, frame=None, ASDloc=None,
         data = data.highpass(float(hpass))
 	if (shift != 0):
 	    data = fshift(data,float(shift))
-    if Aweight == True:
-	    data = invAWeight(data,cutoff=20)
     if stretch != 0:
         data = time_expand_central_freq(data,float(stretch))
+    if Aweight == True:
+	    data = invAWeight(data,cutoff=20)
     #set up file name
     path = outdir + '/' + gps  + '.wav'
     wavwrite(data,path,amp=maxamp,rate=data.sample_rate.value)
